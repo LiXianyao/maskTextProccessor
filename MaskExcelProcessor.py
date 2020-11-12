@@ -77,9 +77,9 @@ class MaskingProcessor():
         print("-----------INFO: 处理中，文本预处理完成，进入识别阶段（需要几分钟，请稍候） -------------------")
 
         texts_entity_dict = self.get_texts_ner_res(trans_sents)
-        total = len(texts)
+        total = len(trans_sents)
         print(data_dict)
-        for text in texts:
+        for text in trans_sents:
             to_be_mask = set()
             idx = text.find("话务")
             for key in self.search_key:
@@ -133,6 +133,7 @@ class MaskingProcessor():
 
     def remove_words_from(self, sents):
         remove_records = []
+        after_remove_sent = []
         for sid in range(len(sents)):
             sent = sents[sid]
             remove = []
@@ -140,9 +141,9 @@ class MaskingProcessor():
                 if sent.find(word) != -1:
                     remove.append(word)
                 sent = sent.replace(word, "")
-            sents[sid] = sent
+            after_remove_sent.append(sent)
             remove_records.append(remove)
-        return sents, remove_records
+        return after_remove_sent, remove_records
 
     def trans_chinese2num(self, sents):
         pattern = re.compile("[零一二三四五六七八九十]{2,}")

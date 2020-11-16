@@ -7,12 +7,12 @@ import warnings
 from zhner import ZHNer
 import json
 from processData.data import read_dictionary, tag2label
-from utils import get_multiple_entity
+from utils import get_multiple_entity, str2bool
 warnings.filterwarnings('ignore')
 import re
 
 ## Session configuration
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # default: 0
 cwd = os.getcwd()
 config = tf.ConfigProto()
@@ -58,17 +58,23 @@ class MaskingProcessor():
         print("--------- INFO:checkpoint还原模型完成！,checkpoint = {}".format(self.model_path))
 
     """（调试用）加载一个现成的结果json文件导出到csv"""
-    def run(self, file_name):
+    def run(self, file_name, keep_origin):
         # file_name = "客服话务原始文本及打标.xlsx"
         mask_column_key = "mask内容"
         masked_text_column_key = "处理后文本"
+        text_column = '文本详情'
 
         df = pd.read_excel(file_name)
-        columns = list(df.columns) + [mask_column_key, masked_text_column_key]
+        if keep_origin:  # 保留原文的模式（调试用）
+            columns = list(df.columns) + [mask_column_key, masked_text_column_key]
+        else:
+            columns = list(df.columns) + [masked_text_column_key]
+            columns.remove(text_column)
+        keep_columns = set(df.columns).intersection(columns)
 
-        if '文本详情' not in columns:
+        if text_column not in df.columns:
             raise AttributeError("excel文件找不到名为 '文本详情' 的列，请检查文件是否正确")
-        texts = df['文本详情']
+        texts = df[text_column]
         cnt = 0
         data_dict = {k: [] for k in columns}
 
@@ -113,9 +119,9 @@ class MaskingProcessor():
             for mask_word in final:
                 text = text.replace(mask_word, "[XX]")
 
-            for key in df.columns:
+            for key in keep_columns:
                 data_dict[key].append(df[key][cnt])
-            data_dict[mask_column_key].append(",".join(final))
+            data_dict[mask_column_key].append(",".join(final)) if origin else None
             data_dict[masked_text_column_key].append(text)
             #print(data_dict[mask_column_key])
 
@@ -209,20 +215,23 @@ if __name__ == "__main__":
     import getopt, sys
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "f:", ["file="])
+        opts, args = getopt.getopt(sys.argv[1:], "f:o:", ["file=", "origin="])
     except getopt.GetoptError:
         # 参数错误
         printUsage()
         sys.exit(-1)
 
     target_file = ""
+    origin = False
     for opt, arg in opts:
         if opt in ("-f", "--file"):
             target_file = arg
+        if opt in ("-o", "--origin"):
+            origin = str2bool(arg)
     if target_file == "":
         printUsage()
 
     processor = MaskingProcessor()
-    processor.run(target_file)
+    processor.run(target_file, origin)
 
 

@@ -34,6 +34,7 @@ class MaskingProcessor():
         with open("manualFeatures.json", "r") as rules_file:
             defined_rules = json.load(rules_file)
             self.remove_words = defined_rules["清除词"]
+            self.keep_words = defined_rules["保留词"]
             self.search_key = {key: value["key"] for (key, value) in defined_rules["规则识别"].items()}
             self.search_re = {key: value["rules"] for (key, value) in defined_rules["规则识别"].items()}
             for key in self.search_re:
@@ -78,16 +79,19 @@ class MaskingProcessor():
         cnt = 0
         data_dict = {k: [] for k in columns}
 
+        ## 将 manualFeatures.json中定义的清除词全部移除
         clear_texts, removed_words = self.remove_words_from(texts)
+        ## 将中文数字换成英文数字
         trans_sents = self.trans_chinese2num(clear_texts)
         print("-----------INFO: 处理中，文本预处理完成，进入识别阶段（需要几分钟，请稍候） -------------------")
-
+        ## 调用NER模型批处理所有句子
         texts_entity_dict = self.get_texts_ner_res(trans_sents)
         total = len(trans_sents)
         print(data_dict)
         for text in trans_sents:
             to_be_mask = set()
             idx = text.find("话务")
+            ## 应用manualFeatures 中的规则识别，找到关键字，清除后面的可能内容
             for key in self.search_key:
                 search_res = re.search(self.search_key[key], text)
                 if search_res is None: continue
@@ -98,7 +102,8 @@ class MaskingProcessor():
 
             for rel in self.global_re:
                 to_be_mask = to_be_mask.union(iter_search(text, rel, idx))
-            ## 取NER
+
+            ## 取句子的NER结果
             entity_dict = texts_entity_dict[cnt]
             for key in entity_dict:
                 to_be_mask = to_be_mask.union(set(entity_dict[key]))
@@ -117,7 +122,13 @@ class MaskingProcessor():
                     final.append(text[left: right])
 
             for mask_word in final:
-                text = text.replace(mask_word, "[XX]")
+                ignore = False  # 含有保留词的跳过
+                for keep_word in self.keep_words:
+                    if mask_word.find(keep_word) != -1:
+                        ignore = True
+                        break
+                if not ignore:
+                    text = text.replace(mask_word, "[XX]")
 
             for key in keep_columns:
                 data_dict[key].append(df[key][cnt])

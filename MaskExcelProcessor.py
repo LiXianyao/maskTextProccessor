@@ -111,6 +111,8 @@ class MaskingProcessor():
             sort_idx = sorted(list(to_be_mask), key=lambda x: (x[0], -x[1]))
             right = -1
             final = removed_words[cnt]
+
+            ## 重合的合并到一个上，留最大的区间
             for pair in sort_idx:
                 if pair[1] <= right: continue
                 if pair[0] <= right:  #
@@ -119,16 +121,19 @@ class MaskingProcessor():
                 else:
                     left = max(pair[0], right)
                     right = pair[1]
-                    final.append(text[left: right])
+                    ignore = False  # 含有保留词的跳过
+                    for keep_word in self.keep_words:
+                        keep_left = max(0, left - len(keep_word) + 1)
+                        keep_right = min(len(text), right + len(keep_word) - 1)
+                        mask_segment = text[keep_left: keep_right]
+                        if mask_segment.find(keep_word) != -1:
+                            ignore = True
+                            break
+                    if not ignore:
+                        final.append(text[left: right])
 
-            for mask_word in final:
-                ignore = False  # 含有保留词的跳过
-                for keep_word in self.keep_words:
-                    if mask_word.find(keep_word) != -1:
-                        ignore = True
-                        break
-                if not ignore:
-                    text = text.replace(mask_word, "[XX]")
+            for mask_segment in final:
+                text = text.replace(mask_segment, "[XX]")
 
             for key in keep_columns:
                 data_dict[key].append(df[key][cnt])
